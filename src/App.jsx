@@ -1,0 +1,542 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+
+const MONTHLY_LINK = "https://buy.stripe.com/7sYfZhbhagFecm0a022Fa09";
+const YEARLY_LINK  = "https://buy.stripe.com/00waEX3OI74E0Di3BE2Fa08";
+const SITE_URL     = "https://lolab.app";
+
+const TEMPLATES = [
+  { name: "Drake",          url: "https://i.imgflip.com/30b1gx.jpg" },
+  { name: "Distracted BF",  url: "https://i.imgflip.com/1ur9b0.jpg" },
+  { name: "Two Buttons",    url: "https://i.imgflip.com/1g8my4.jpg" },
+  { name: "Change My Mind", url: "https://i.imgflip.com/24y43o.jpg" },
+  { name: "This Is Fine",   url: "https://i.imgflip.com/wxica.jpg" },
+  { name: "Expanding Brain",url: "https://i.imgflip.com/1jwhww.jpg" },
+  { name: "Gru Plan",       url: "https://i.imgflip.com/26am.jpg" },
+  { name: "Doge",           url: "https://i.imgflip.com/4t0m5.jpg" },
+];
+
+const ADMOB_CLIENT  = "ca-app-pub-3382071605271904";
+const ADMOB_SLOT    = "7688714176";
+const REWARD_BONUS  = 3; // free memes earned per ad watch
+
+// ─── Rewarded Ad Hook ────────────────────────────────────────────────────────
+function useRewardedAd(onRewarded) {
+  const watchAd = useCallback(() => {
+    // On web: show an interstitial-style ad using adsbygoogle, then grant reward
+    // On native (Capacitor/AdMob SDK) this would use the full rewarded video API
+    try {
+      const adWindow = window.open("", "_blank", "width=400,height=300");
+      if (adWindow) {
+        adWindow.document.write(`
+          <html><body style="background:#000;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;">
+            <p style="font-size:13px;color:#888;margin-bottom:12px;">Advertisement</p>
+            <ins class="adsbygoogle" style="display:block;width:300px;height:250px"
+              data-ad-client="${ADMOB_CLIENT}" data-ad-slot="${ADMOB_SLOT}" data-ad-format="rectangle"></ins>
+            <script>(adsbygoogle = window.adsbygoogle || []).push({});<\/script>
+            <p style="margin-top:20px;font-size:14px;color:#aaa;">This window will close in <span id="t">5</span>s</p>
+            <script>
+              let n=5;
+              const i=setInterval(()=>{n--;document.getElementById('t').textContent=n;if(n<=0){clearInterval(i);window.close();}},1000);
+            <\/script>
+          </body></html>
+        `);
+        adWindow.document.close();
+        // Grant reward after 5 seconds (ad view time)
+        setTimeout(() => { onRewarded(); }, 5500);
+      } else {
+        // Popup blocked fallback — grant reward anyway to not frustrate user
+        onRewarded();
+      }
+    } catch(e) {
+      onRewarded();
+    }
+  }, [onRewarded]);
+  return { watchAd };
+}
+
+// ─── Paywall ─────────────────────────────────────────────────────────────────
+function PaywallModal({ onClose }) {
+  const [billing, setBilling] = useState("yearly");
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,backdropFilter:"blur(8px)"}}>
+      <div style={{background:"#0d0d18",border:"1.5px solid #0072ff",borderRadius:20,padding:"44px 40px",maxWidth:460,width:"90%",textAlign:"center",boxShadow:"0 0 80px rgba(0,114,255,0.2)"}}>
+        <div style={{fontSize:13,letterSpacing:6,color:"#00c6ff",fontFamily:"'Rajdhani',sans-serif",fontWeight:700}}>LOLAB</div>
+        <div style={{fontSize:26,letterSpacing:4,color:"#fff",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,marginBottom:4}}>MEME GENERATOR</div>
+        <div style={{width:60,height:2,background:"linear-gradient(90deg,#00c6ff,#0072ff)",margin:"0 auto 22px"}}/>
+        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:15,color:"#999",marginBottom:26,lineHeight:1.7}}>
+          You've used your <span style={{color:"#00c6ff",fontWeight:700}}>{FREE_LIMIT} free memes</span>.<br/>Unlock unlimited creation with Pro.
+        </div>
+        <div style={{display:"flex",background:"#111",borderRadius:50,padding:4,marginBottom:26,gap:4}}>
+          {["monthly","yearly"].map(b=>(
+            <button key={b} onClick={()=>setBilling(b)} style={{flex:1,padding:"10px 0",borderRadius:50,border:"none",cursor:"pointer",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,letterSpacing:2,background:billing===b?"linear-gradient(135deg,#00c6ff,#0072ff)":"transparent",color:billing===b?"#fff":"#555",transition:"all .2s"}}>
+              {b==="yearly"?"YEARLY — SAVE 44%":"MONTHLY"}
+            </button>
+          ))}
+        </div>
+        <div style={{marginBottom:26}}>
+          <span style={{fontSize:52,fontFamily:"'Rajdhani',sans-serif",fontWeight:700,color:"#fff"}}>{billing==="yearly"?"$1.67":"$2.99"}</span>
+          <span style={{fontFamily:"'DM Sans',sans-serif",color:"#555",fontSize:14}}> / month</span>
+          {billing==="yearly"&&<div style={{fontFamily:"'DM Sans',sans-serif",color:"#00c6ff",fontSize:13,marginTop:4}}>Billed $19.99/year</div>}
+        </div>
+        <div style={{textAlign:"left",marginBottom:30,display:"flex",flexDirection:"column",gap:9}}>
+          {["Unlimited meme creation","All templates + uploads","Custom font, size & color","Drag-to-reposition text","HD PNG downloads, no watermark","Share to social, email & SMS"].map(f=>(
+            <div key={f} style={{display:"flex",alignItems:"center",gap:10,fontFamily:"'DM Sans',sans-serif",fontSize:14,color:"#ccc"}}>
+              <span style={{color:"#00c6ff"}}>⚡</span>{f}
+            </div>
+          ))}
+        </div>
+        <a href={billing==="yearly"?YEARLY_LINK:MONTHLY_LINK} target="_blank" rel="noopener noreferrer" style={{display:"block",padding:"16px 0",borderRadius:12,background:"linear-gradient(135deg,#00c6ff,#0072ff)",color:"#fff",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:20,letterSpacing:3,textDecoration:"none",boxShadow:"0 4px 24px rgba(0,114,255,.45)"}}>
+          UNLOCK PRO ⚡
+        </a>
+        <button onClick={onClose} style={{marginTop:14,background:"none",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#333"}}>Maybe later</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Share Modal ─────────────────────────────────────────────────────────────
+function ShareModal({ dataUrl, onClose, onShare }) {
+  const [tab, setTab]           = useState("social");
+  const [email, setEmail]       = useState("");
+  const [phone, setPhone]       = useState("");
+  const [copied, setCopied]     = useState(false);
+  const [sent, setSent]         = useState(false);
+  const shareMsg = `🔥 Check out this meme I made on LOLAB! ${SITE_URL}`;
+
+  const socials = [
+    { name:"Twitter / X",  color:"#1DA1F2", icon:"𝕏",
+      url:`https://twitter.com/intent/tweet?text=${encodeURIComponent("😂 Made this meme with LOLAB Meme Generator! " + SITE_URL)}` },
+    { name:"Facebook",     color:"#1877F2", icon:"f",
+      url:`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(SITE_URL)}&quote=${encodeURIComponent("Made this meme with LOLAB!")}` },
+    { name:"Reddit",       color:"#FF4500", icon:"R",
+      url:`https://reddit.com/submit?url=${encodeURIComponent(SITE_URL)}&title=${encodeURIComponent("Made this meme with LOLAB Meme Generator")}` },
+    { name:"WhatsApp",     color:"#25D366", icon:"W",
+      url:`https://wa.me/?text=${encodeURIComponent(shareMsg)}` },
+    { name:"Telegram",     color:"#229ED9", icon:"✈",
+      url:`https://t.me/share/url?url=${encodeURIComponent(SITE_URL)}&text=${encodeURIComponent(shareMsg)}` },
+    { name:"Pinterest",    color:"#E60023", icon:"P",
+      url:`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(SITE_URL)}&description=${encodeURIComponent("LOLAB Meme Generator")}` },
+  ];
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(SITE_URL).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});
+  };
+
+  const sendEmail = () => {
+    if(!email) return;
+    window.location.href = `mailto:${email}?subject=${encodeURIComponent("Check out this meme!")}&body=${encodeURIComponent(shareMsg)}`;
+    setSent(true); setTimeout(()=>setSent(false),2000);
+    onShare();
+  };
+
+  const sendSMS = () => {
+    if(!phone) return;
+    window.location.href = `sms:${phone}?body=${encodeURIComponent(shareMsg)}`;
+    setSent(true); setTimeout(()=>setSent(false),2000);
+    onShare();
+  };
+
+  const downloadAndShare = () => {
+    const a = document.createElement("a");
+    a.download = "lolab-meme.png";
+    a.href = dataUrl;
+    a.click();
+    onShare();
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,backdropFilter:"blur(8px)"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#0d0d18",border:"1.5px solid #0072ff",borderRadius:20,padding:"36px 32px",maxWidth:480,width:"92%",boxShadow:"0 0 80px rgba(0,114,255,0.18)"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:22}}>
+          <div>
+            <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:22,letterSpacing:3,color:"#fff"}}>SHARE YOUR MEME ⚡</div>
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#444",marginTop:2}}>Spread the chaos</div>
+          </div>
+          <button onClick={onClose} style={{background:"#111",border:"1px solid #222",borderRadius:8,color:"#666",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        {/* Meme preview */}
+        <div style={{marginBottom:22,borderRadius:10,overflow:"hidden",border:"1px solid #1a1a2a",maxHeight:160,display:"flex",justifyContent:"center",background:"#080810"}}>
+          <img src={dataUrl} alt="meme" style={{maxHeight:160,objectFit:"contain"}}/>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"flex",background:"#0a0a14",borderRadius:10,padding:3,marginBottom:22,gap:3}}>
+          {[["social","🌐 Social"],["contact","📋 Contacts"],["link","🔗 Link"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{flex:1,padding:"9px 0",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,letterSpacing:1,background:tab===k?"linear-gradient(135deg,#00c6ff,#0072ff)":"transparent",color:tab===k?"#fff":"#444",transition:"all .2s"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Social Tab */}
+        {tab==="social"&&(
+          <div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+              {socials.map(s=>(
+                <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer" onClick={onShare} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",background:"#0a0a14",border:"1px solid #1a1a2a",borderRadius:10,textDecoration:"none",color:"#ccc",fontFamily:"'DM Sans',sans-serif",fontSize:13,transition:"all .2s",cursor:"pointer"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=s.color;e.currentTarget.style.color="#fff";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a2a";e.currentTarget.style.color="#ccc";}}>
+                  <div style={{width:30,height:30,borderRadius:8,background:s.color,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:14,color:"#fff",flexShrink:0}}>{s.icon}</div>
+                  {s.name}
+                </a>
+              ))}
+            </div>
+            <button onClick={downloadAndShare} style={{width:"100%",padding:"11px",background:"#0a0a14",border:"1px dashed #2a2a3a",borderRadius:10,color:"#777",fontFamily:"'DM Sans',sans-serif",fontSize:13,cursor:"pointer",transition:"all .2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="#0072ff";e.currentTarget.style.color="#fff";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a3a";e.currentTarget.style.color="#777";}}>
+              ⬇ Download first, then share manually
+            </button>
+          </div>
+        )}
+
+        {/* Contact Tab */}
+        {tab==="contact"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {/* Email */}
+            <div style={{background:"#0a0a14",border:"1px solid #1a1a2a",borderRadius:12,padding:"16px"}}>
+              <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,letterSpacing:2,color:"#ccc",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:18}}>📧</span> SEND VIA EMAIL
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="friend@email.com" style={{flex:1,background:"#070710",border:"1px solid #1a1a2a",borderRadius:8,padding:"9px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#fff",outline:"none"}}
+                  onFocus={e=>e.target.style.borderColor="#0072ff"} onBlur={e=>e.target.style.borderColor="#1a1a2a"}/>
+                <button onClick={sendEmail} style={{background:"linear-gradient(135deg,#00c6ff,#0072ff)",border:"none",borderRadius:8,padding:"9px 16px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,letterSpacing:1,color:"#fff",cursor:"pointer"}}>
+                  {sent?"✓":"SEND"}
+                </button>
+              </div>
+            </div>
+
+            {/* SMS */}
+            <div style={{background:"#0a0a14",border:"1px solid #1a1a2a",borderRadius:12,padding:"16px"}}>
+              <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,letterSpacing:2,color:"#ccc",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:18}}>💬</span> SEND VIA SMS
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+1 555 000 0000" style={{flex:1,background:"#070710",border:"1px solid #1a1a2a",borderRadius:8,padding:"9px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#fff",outline:"none"}}
+                  onFocus={e=>e.target.style.borderColor="#0072ff"} onBlur={e=>e.target.style.borderColor="#1a1a2a"}/>
+                <button onClick={sendSMS} style={{background:"linear-gradient(135deg,#25D366,#128C7E)",border:"none",borderRadius:8,padding:"9px 16px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,letterSpacing:1,color:"#fff",cursor:"pointer"}}>
+                  {sent?"✓":"SEND"}
+                </button>
+              </div>
+            </div>
+
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#2a2a3a",textAlign:"center"}}>
+              Opens your default mail / messages app with the link pre-filled
+            </div>
+          </div>
+        )}
+
+        {/* Link Tab */}
+        {tab==="link"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{background:"#0a0a14",border:"1px solid #1a1a2a",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+              <span style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{SITE_URL}</span>
+              <button onClick={copyLink} style={{background:copied?"linear-gradient(135deg,#22c55e,#16a34a)":"linear-gradient(135deg,#00c6ff,#0072ff)",border:"none",borderRadius:8,padding:"8px 16px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,letterSpacing:1,color:"#fff",cursor:"pointer",flexShrink:0,transition:"all .2s"}}>
+                {copied?"COPIED ✓":"COPY"}
+              </button>
+            </div>
+
+            {/* Native share API */}
+            {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
+              <button onClick={()=>{try{navigator.share({title:"LOLAB Meme Generator",text:shareMsg,url:SITE_URL}).then(onShare).catch(()=>{});}catch(e){}}} style={{width:"100%",padding:"13px",background:"#0a0a14",border:"1px solid #1a1a2a",borderRadius:12,color:"#ccc",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:16,letterSpacing:2,cursor:"pointer",transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="#0072ff";e.currentTarget.style.color="#fff";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a2a";e.currentTarget.style.color="#ccc";}}>
+                📱 SHARE VIA DEVICE
+              </button>
+            )}
+
+            <div style={{background:"#080810",borderRadius:10,padding:"14px 16px",border:"1px dashed #1a1a2a"}}>
+              <div style={{fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:13,letterSpacing:2,color:"#444",marginBottom:8}}>SHARE MESSAGE</div>
+              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#555",lineHeight:1.6}}>{shareMsg}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ────────────────────────────────────────────────────────────────
+export default function App() {
+  const canvasRef    = useRef(null);
+  const fileInputRef = useRef(null);
+  const [imgObj,      setImgObj]      = useState(null);
+  const [texts,       setTexts]       = useState([
+    {id:1,content:"TOP TEXT",   fontSize:36,color:"#ffffff",x:50,y:8 },
+    {id:2,content:"BOTTOM TEXT",fontSize:36,color:"#ffffff",x:50,y:88},
+  ]);
+  const [selectedId,  setSelectedId]  = useState(1);
+  const [dragging,    setDragging]    = useState(null);
+  const [tab,         setTab]         = useState("templates");
+  const [downloaded,  setDownloaded]  = useState(false);
+  const [memeCount,   setMemeCount]   = useState(0);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [showShare,   setShowShare]   = useState(false);
+  const [shareData,   setShareData]   = useState(null);
+  const [adBonus,     setAdBonus]     = useState(0);
+  const [adRewarded,  setAdRewarded]  = useState(false);
+  const isPro = false;
+
+  const totalLimit = FREE_LIMIT + adBonus;
+
+  const onRewarded = useCallback(() => {
+    setAdBonus(b => b + REWARD_BONUS);
+    setAdRewarded(true);
+    setTimeout(() => setAdRewarded(false), 3000);
+  }, []);
+
+  const { watchAd } = useRewardedAd(onRewarded);
+
+  const sel = texts.find(t=>t.id===selectedId);
+
+  const loadImage = useCallback((src)=>{
+    const img=new Image(); img.crossOrigin="anonymous";
+    img.onload=()=>setImgObj(img); img.src=src;
+  },[]);
+
+  useEffect(()=>{loadImage(TEMPLATES[0].url);},[loadImage]);
+
+  const draw = useCallback(()=>{
+    const c=canvasRef.current; if(!c||!imgObj)return;
+    const ctx=c.getContext("2d"),W=c.width,H=c.height;
+    ctx.clearRect(0,0,W,H);
+    const r=Math.min(W/imgObj.width,H/imgObj.height);
+    const dw=imgObj.width*r,dh=imgObj.height*r;
+    ctx.drawImage(imgObj,(W-dw)/2,(H-dh)/2,dw,dh);
+    texts.forEach(t=>{
+      const fs=t.fontSize;
+      ctx.font=`900 ${fs}px Impact,'Arial Black',sans-serif`;
+      ctx.textAlign="center"; ctx.lineWidth=fs/8;
+      ctx.strokeStyle="rgba(0,0,0,0.9)"; ctx.fillStyle=t.color;
+      const x=(t.x/100)*W,y=(t.y/100)*H;
+      ctx.strokeText(t.content,x,y+fs*0.35);
+      ctx.fillText(t.content,x,y+fs*0.35);
+    });
+    if(!isPro){
+      ctx.font="bold 13px 'Rajdhani',sans-serif";
+      ctx.fillStyle="rgba(0,198,255,0.3)";
+      ctx.textAlign="right";
+      ctx.fillText("LOLAB.APP",W-10,H-10);
+    }
+  },[imgObj,texts,isPro]);
+
+  useEffect(()=>{draw();},[draw]);
+
+  const handleFile=(e)=>{
+    const f=e.target.files[0]; if(!f)return;
+    const r=new FileReader(); r.onload=ev=>loadImage(ev.target.result); r.readAsDataURL(f);
+    setTab("edit");
+  };
+
+  const onDown=(e)=>{
+    const rect=canvasRef.current.getBoundingClientRect();
+    const mx=((e.clientX-rect.left)/rect.width)*100;
+    const my=((e.clientY-rect.top)/rect.height)*100;
+    let found=null;
+    texts.forEach(t=>{if(Math.abs(t.x-mx)<20&&Math.abs(t.y-my)<6)found=t.id;});
+    if(found){setSelectedId(found);setDragging(found);}
+  };
+  const onMove=(e)=>{
+    if(!dragging)return;
+    const rect=canvasRef.current.getBoundingClientRect();
+    const mx=Math.max(5,Math.min(95,((e.clientX-rect.left)/rect.width)*100));
+    const my=Math.max(2,Math.min(98,((e.clientY-rect.top)/rect.height)*100));
+    setTexts(p=>p.map(t=>t.id===dragging?{...t,x:mx,y:my}:t));
+  };
+  const onUp=()=>setDragging(null);
+
+  const upd=(field,val)=>setTexts(p=>p.map(t=>t.id===selectedId?{...t,[field]:val}:t));
+
+  const getDataUrl=()=>canvasRef.current?.toDataURL("image/png");
+
+  const download=()=>{
+    if(!isPro&&memeCount>=totalLimit){setShowPaywall(true);return;}
+    const a=document.createElement("a"); a.download="lolab-meme.png"; a.href=getDataUrl(); a.click();
+    setMemeCount(n=>n+1); setDownloaded(true); setTimeout(()=>setDownloaded(false),2000);
+  };
+
+  const openShare=()=>{
+    if(!isPro&&memeCount>=totalLimit){setShowPaywall(true);return;}
+    setShareData(getDataUrl());
+    setShowShare(true);
+  };
+
+  const remaining=Math.max(0,totalLimit-memeCount);
+
+  return (
+    <div style={{minHeight:"100vh",background:"#07070f",fontFamily:"'Rajdhani',sans-serif",color:"#f0f0f0",display:"flex",flexDirection:"column",alignItems:"center",paddingBottom:48}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=DM+Sans:wght@400;600&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0}
+        ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#0d0d0d}::-webkit-scrollbar-thumb{background:#0072ff;border-radius:3px}
+        .tab{cursor:pointer;padding:10px 18px;border:none;background:transparent;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:2px;color:#444;transition:all .2s;border-bottom:3px solid transparent}
+        .tab.on{color:#00c6ff;border-bottom-color:#00c6ff}.tab:hover{color:#ccc}
+        .tcard{cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid transparent;transition:all .2s;position:relative;aspect-ratio:1}
+        .tcard:hover{border-color:#0072ff;transform:scale(1.04)}
+        .tcard img{width:100%;height:100%;object-fit:cover;display:block}
+        .tcard span{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.8);font-size:10px;font-family:'DM Sans',sans-serif;padding:3px;text-align:center;color:#ccc;letter-spacing:1px}
+        .lbtn{cursor:pointer;background:#0a0a14;border:1px solid #1a1a2a;border-radius:6px;padding:7px 12px;font-family:'DM Sans',sans-serif;font-size:13px;color:#999;transition:all .2s;display:flex;align-items:center;justify-content:space-between;gap:8px}
+        .lbtn.on{border-color:#0072ff;color:#fff;background:#080f1a}.lbtn:hover{border-color:#333}
+        .inp{width:100%;background:#0a0a14;border:1px solid #1a1a2a;border-radius:6px;padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:14px;color:#fff;outline:none;transition:border .2s}
+        .inp:focus{border-color:#0072ff}
+        input[type=range]{width:100%;accent-color:#0072ff;cursor:pointer}
+        .dl{background:linear-gradient(135deg,#00c6ff,#0072ff);border:none;border-radius:10px;padding:13px 36px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:3px;color:#fff;cursor:pointer;transition:all .2s;box-shadow:0 4px 24px rgba(0,114,255,.4)}
+        .dl:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,198,255,.5)}
+        .dl.done{background:linear-gradient(135deg,#22c55e,#16a34a)}
+        .sh{background:transparent;border:1.5px solid #0072ff;border-radius:10px;padding:13px 36px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:3px;color:#00c6ff;cursor:pointer;transition:all .2s}
+        .sh:hover{background:#0072ff22;transform:translateY(-2px)}
+        .addbtn{background:#09090f;border:1px dashed #222;border-radius:6px;padding:7px;font-family:'DM Sans',sans-serif;font-size:13px;color:#555;cursor:pointer;width:100%;transition:all .2s}
+        .addbtn:hover{border-color:#0072ff;color:#fff}
+        canvas{cursor:grab;display:block}canvas:active{cursor:grabbing}
+      `}</style>
+
+      {/* Header */}
+      <div style={{width:"100%",background:"#09090f",borderBottom:"1.5px solid #0072ff",padding:"14px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <span style={{fontSize:26}}>⚡</span>
+          <div>
+            <div style={{fontSize:24,letterSpacing:6,fontWeight:700,background:"linear-gradient(90deg,#00c6ff,#0072ff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>LOLAB</div>
+            <div style={{fontSize:10,letterSpacing:4,color:"#333",fontFamily:"'DM Sans',sans-serif",marginTop:-3}}>MEME GENERATOR</div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <span style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:remaining===0?"#ff4444":"#333"}}>
+            {remaining} free left
+          </span>
+          <button onClick={()=>setShowPaywall(true)} style={{background:"linear-gradient(135deg,#00c6ff,#0072ff)",border:"none",borderRadius:8,padding:"8px 18px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:14,letterSpacing:2,color:"#fff",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,114,255,.35)"}}>
+            GO PRO ⚡
+          </button>
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:22,width:"100%",maxWidth:1080,padding:"0 16px"}}>
+        {/* Left Panel */}
+        <div style={{width:300,flexShrink:0,display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{display:"flex",borderBottom:"1px solid #111",marginBottom:2}}>
+            {["templates","upload","edit"].map(t=>(
+              <button key={t} className={`tab${tab===t?" on":""}`} onClick={()=>setTab(t)}>
+                {t==="templates"?"🖼 Memes":t==="upload"?"📤 Upload":"✏️ Edit"}
+              </button>
+            ))}
+          </div>
+
+          {tab==="templates"&&(
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>
+              {TEMPLATES.map(tpl=>(
+                <div key={tpl.name} className="tcard" onClick={()=>{loadImage(tpl.url);setTab("edit")}}>
+                  <img src={tpl.url} alt={tpl.name} crossOrigin="anonymous"/>
+                  <span>{tpl.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab==="upload"&&(
+            <div onClick={()=>fileInputRef.current.click()} style={{border:"2px dashed #1a2030",borderRadius:12,padding:"44px 20px",textAlign:"center",cursor:"pointer",background:"#090910",transition:"all .2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="#0072ff";e.currentTarget.style.background="#080f1a"}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a2030";e.currentTarget.style.background="#090910"}}
+            >
+              <div style={{fontSize:40,marginBottom:10}}>📁</div>
+              <div style={{fontSize:18,letterSpacing:3,color:"#00c6ff",fontWeight:700}}>CHOOSE IMAGE</div>
+              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#333",marginTop:6}}>PNG · JPG · GIF</div>
+              <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/>
+            </div>
+          )}
+
+          {tab==="edit"&&(
+            !sel ? (
+              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#444",textAlign:"center",padding:"24px 0"}}>
+                No text layers. Add one below.<br/>
+                <button className="addbtn" style={{marginTop:12}} onClick={()=>{const id=Date.now();setTexts(p=>[...p,{id,content:"NEW TEXT",fontSize:36,color:"#ffffff",x:50,y:50}]);setSelectedId(id);}}>+ Add Layer</button>
+              </div>
+            ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div>
+                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#333",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Layers</div>
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  {texts.map(t=>(
+                    <div key={t.id} className={`lbtn${t.id===selectedId?" on":""}`} onClick={()=>setSelectedId(t.id)}>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:170}}>{t.content||"(empty)"}</span>
+                      <button onClick={e=>{e.stopPropagation();setTexts(p=>{const next=p.filter(x=>x.id!==t.id);if(t.id===selectedId&&next.length>0)setSelectedId(next[0].id);return next;})}} style={{background:"none",border:"none",color:"#0072ff",cursor:"pointer",fontSize:15,lineHeight:1}}>✕</button>
+                    </div>
+                  ))}
+                  <button className="addbtn" onClick={()=>{const id=Date.now();setTexts(p=>[...p,{id,content:"NEW TEXT",fontSize:36,color:"#ffffff",x:50,y:50}]);setSelectedId(id);}}>+ Add Layer</button>
+                </div>
+              </div>
+              <div>
+                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#333",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Text</div>
+                <input className="inp" value={sel.content} onChange={e=>upd("content",e.target.value)} placeholder="Your meme text..."/>
+              </div>
+              <div>
+                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#333",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Size — {sel.fontSize}px</div>
+                <input type="range" min={12} max={100} value={sel.fontSize} onChange={e=>upd("fontSize",Number(e.target.value))}/>
+              </div>
+              <div>
+                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#333",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>Color</div>
+                <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+                  {["#ffffff","#000000","#00c6ff","#ffdd00","#ff3b3b","#b8ff3b","#ff69b4"].map(c=>(
+                    <div key={c} onClick={()=>upd("color",c)} style={{width:26,height:26,borderRadius:"50%",background:c,cursor:"pointer",border:sel.color===c?"3px solid #00c6ff":"2px solid #1a1a2a",transition:"all .15s"}}/>
+                  ))}
+                  <input type="color" value={sel.color} onChange={e=>upd("color",e.target.value)} style={{width:26,height:26,border:"none",borderRadius:"50%",cursor:"pointer",padding:0,background:"none"}}/>
+                </div>
+              </div>
+              <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#2a2a3a",background:"#09090f",borderRadius:6,padding:"8px 10px"}}>
+                ⚡ Drag text on canvas to reposition
+              </div>
+            </div>
+            )
+          )}
+        </div>
+
+        {/* Canvas Area */}
+        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+          <div style={{position:"relative",borderRadius:12,overflow:"hidden",boxShadow:"0 0 60px rgba(0,114,255,0.12)",border:"1px solid #111820"}}>
+            <canvas ref={canvasRef} width={600} height={600} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} style={{maxWidth:"100%"}}/>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center"}}>
+            <button className={`dl${downloaded?" done":""}`} onClick={download}>
+              {downloaded?"✓ SAVED!":"⬇ DOWNLOAD"}
+            </button>
+            <button className="sh" onClick={openShare}>
+              🔗 SHARE
+            </button>
+          </div>
+
+          {/* Ad reward success toast */}
+          {adRewarded && (
+            <div style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",borderRadius:10,padding:"10px 20px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,letterSpacing:2,color:"#fff",textAlign:"center"}}>
+              ✅ +{REWARD_BONUS} FREE MEMES UNLOCKED!
+            </div>
+          )}
+
+          <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"#2a2a3a",textAlign:"center"}}>
+            {remaining>0
+              ? <>{remaining} free action{remaining!==1?"s":""} left · <span style={{color:"#0072ff",cursor:"pointer"}} onClick={()=>setShowPaywall(true)}>Go Pro for unlimited ⚡</span></>
+              : (
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+                  <span style={{color:"#ff4444",fontSize:13}}>Free limit reached</span>
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
+                    <button onClick={watchAd} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:8,padding:"10px 20px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,letterSpacing:2,color:"#fff",cursor:"pointer",boxShadow:"0 4px 16px rgba(245,158,11,0.35)"}}>
+                      📺 WATCH AD — GET {REWARD_BONUS} FREE
+                    </button>
+                    <button onClick={()=>setShowPaywall(true)} style={{background:"transparent",border:"1.5px solid #0072ff",borderRadius:8,padding:"10px 20px",fontFamily:"'Rajdhani',sans-serif",fontWeight:700,fontSize:15,letterSpacing:2,color:"#00c6ff",cursor:"pointer"}}>
+                      ⚡ GO PRO
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+          </div>
+        </div>
+      </div>
+
+      {showPaywall&&<PaywallModal onClose={()=>setShowPaywall(false)}/>}
+      {showShare&&shareData&&<ShareModal dataUrl={shareData} onClose={()=>setShowShare(false)} onShare={()=>setMemeCount(n=>n+1)}/>}
+    </div>
+  );
+}
